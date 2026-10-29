@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="learning-notes textbook-v2">
+  <title>${title}</title>
+  <style>${css}</style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳至正文</a>
+  <header class="book-bar">
+    <a class="book-brand" href="${home_href}"><span class="book-mark" aria-hidden="true"></span><span>${course}</span></a>
+    <div class="book-actions"><button type="button" id="ln-menu" aria-haspopup="dialog" aria-controls="ln-panel" aria-expanded="false" hidden>☰ 目录</button><button type="button" id="ln-find" aria-haspopup="dialog" aria-controls="ln-panel" aria-expanded="false" hidden>⌕ 搜索</button></div>
+  </header>
+  <dialog id="ln-panel" aria-labelledby="ln-panel-title">
+    <div class="panel-head"><h2 id="ln-panel-title">阅读导航</h2><button type="button" id="ln-close" aria-label="关闭导航">关闭 ×</button></div>
+    <label for="ln-search">搜索本教材</label>
+    <input id="ln-search" type="search" placeholder="英文名称、缩写、中文或正文关键词" autocomplete="off" spellcheck="false" aria-describedby="ln-search-help">
+    <p id="ln-search-help" class="source">标题优先，也搜索正文。范围仅限本次教材。</p>
+    <section id="ln-results" aria-label="搜索结果" hidden><p id="ln-result-count" role="status" aria-live="polite"></p><ol id="ln-result-list"></ol></section>
+    <div id="ln-navigation">
+      <div class="nav-tabs" role="tablist" aria-label="目录类型"><button type="button" id="ln-tab-course" role="tab" aria-controls="ln-course" aria-selected="false" tabindex="-1">课程目录</button><button type="button" id="ln-tab-chapter" role="tab" aria-controls="ln-chapter" aria-selected="true">本章目录</button></div>
+      <nav id="ln-course" role="tabpanel" aria-labelledby="ln-tab-course" hidden><ol class="toc">${course_toc}</ol></nav>
+      <nav id="ln-chapter" role="tabpanel" aria-labelledby="ln-tab-chapter"><ol class="toc">${toc}</ol></nav>
+    </div>
+  </dialog>
+  <div class="book-layout">
+    <main id="main">
+      <header class="book-header"><p class="eyebrow">LEARN · UNDERSTAND · APPLY</p><h1 id="page-title">${title}</h1><p class="book-subtitle">${subtitle}</p></header>
+      <noscript><details class="fallback-navigation"><summary>阅读目录（搜索需要启用 JavaScript）</summary><p>课程目录</p><ol class="toc">${course_toc}</ol><p>本章目录</p><ol class="toc">${toc}</ol></details></noscript>
+      <article class="textbook-body">${body}</article>
+      ${page_links}
+      <footer class="book-footer">${course} · 学习教材</footer>
+    </main>
+  </div>
+  <script id="ln-book-data" type="application/json">${book_data}</script>
+  <script>${javascript}</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "从资料到完整教材"
+  short_description: "整合资料生成完整 HTML 教材与可复用索引，统一保存在指定目录的 textbook/"
+  default_prompt: "使用 $learning-notes，将指定目录的资料制成完整 HTML 教材，保留英文标题、详细讲解与离线搜索，连同来源索引保存到该目录的 textbook/。"
