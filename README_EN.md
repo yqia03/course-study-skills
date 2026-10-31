@@ -123,7 +123,82 @@ The minimal result for a single-page textbook looks like this. Add chapters, ass
     └── answer.md            # The only submission file in this example
 ```
 
-Open `textbook/index.html` to read the textbook; submit only the files in `submit/` that the assignment requires. The textbook, index, drafts, and answers all stay within `lecture5/`; they are not automatically written to `/courses/probability/`. To work on the entire course, explicitly select the course directory as the new scope.
+Open `textbook/index.html` to read the textbook; submit only the files in `submit/` that the assignment requires. The textbook, index, drafts, and answers all stay within `lecture5/`; they are not automatically written to `/courses/probability/`. To create a textbook for the entire course, explicitly select the course directory as the new textbook generation scope.
+
+## Complete example: sibling textbook and assignment directories
+
+Course materials and assignments do not have to share a directory. In this hypothetical example, first create a textbook for Lecture8, then use it for problem_set_4.
+
+### 1. Create the textbook within Lecture8
+
+Start with:
+
+```text
+/courses/CS6480/
+├── Lecture8/
+│   ├── lecture.pdf
+│   ├── transcript.txt
+│   └── demo.py
+└── problem_set_4/
+    └── homework.pdf
+```
+
+Send a separate textbook request first:
+
+```text
+Use $learning-notes with /courses/CS6480/Lecture8 as the textbook generation scope.
+Verify all relevant materials there and create a complete HTML textbook for beginners.
+Write explanations in English and preserve the original technical titles.
+Save the textbook and source index in Lecture8/textbook/ and persistent drafts in Lecture8/.study-work/.
+Preserve the original materials; do not work on problem_set_4 in this task.
+```
+
+Check that `Lecture8/textbook/index.html` and `Lecture8/textbook/textbook-index.json` exist before starting the assignment. An assignment request does not automatically generate or update the Lecture8 textbook.
+
+### 2. Specify the work directory and read-only references separately
+
+Explicitly naming both directories is recommended, especially in a new chat or when course context is incomplete:
+
+```text
+Use $kill-your-quizs with /courses/CS6480/problem_set_4 as the work/output directory
+and complete homework.pdf there. Use /courses/CS6480/Lecture8 as the read-only reference scope.
+Consult its textbook/ and index first, checking the original slides and classroom code when needed.
+This example accepts English Markdown; write answers to submit/answer.md under the work directory.
+Keep persistent drafts, extracted text, and execution artifacts only in .study-work/ under the work directory.
+Preserve the original course materials; do not modify Lecture8 or its textbook.
+```
+
+The skill first reads the assignment and necessary inputs, then retrieves relevant textbook blocks and sources from Lecture8. The final structure looks like this; the assignment stage writes only within `problem_set_4/`:
+
+```text
+/courses/CS6480/
+├── Lecture8/                         # Read-only during the assignment
+│   ├── lecture.pdf                   # Original materials remain unchanged
+│   ├── transcript.txt
+│   ├── demo.py
+│   ├── textbook/
+│   │   ├── index.html
+│   │   └── textbook-index.json
+│   └── .study-work/                  # Drafts from the earlier textbook task
+└── problem_set_4/
+    ├── homework.pdf
+    ├── .study-work/                  # Drafts and execution artifacts for this assignment
+    └── submit/
+        └── answer.md                 # Submission file in this example
+```
+
+### 3. Limited inference when only the assignment directory is given
+
+A shorter request is also possible:
+
+```text
+Use $kill-your-quizs to complete homework.pdf in /courses/CS6480/problem_set_4.
+Follow the assignment's submission requirements and keep all outputs within problem_set_4.
+```
+
+If the current chat already establishes this course's reference scope clearly, the skill can reuse it. Otherwise, it may inspect the immediate parent's name and directory structure, plus the minimum content needed to identify the course. If names such as `CS6480/` and `Lecture8/` clearly identify the same course, it may infer the immediate parent `/courses/CS6480` as a read-only reference root and briefly state that assumption. Retrieval still follows the questions; it does not extract the entire course.
+
+This inference never walks farther upward or searches Desktop, the home directory, the whole disk, or other courses. If the parent is ambiguous, stay within the assignment directory and ask for reference scope only when necessary materials are missing. An explicit “read only within this directory” instruction or a narrower scope takes precedence and disables parent inference.
 
 ## Directory boundaries
 
@@ -140,9 +215,9 @@ lecture5/
 └── submit/                   # Required answers and attachments
 ```
 
-Selecting `lecture5/` keeps the work inside it. The skills must not automatically create textbook, cache, or answer directories in its parent. Scripts check actual paths after resolving `..` and symbolic links. When the user explicitly specifies other input or output locations, those locations are handled under their respective authorization without broadening the scope for other files.
+The assignment work/output root and course reference search scope are determined separately. Once `lecture5/` or `problem_set_4/` is selected as the work directory, all generated files and persistent drafts stay within it by default: answers in `submit/`, and drafts, extracted text, and execution artifacts in `.study-work/`. Reading a parent or sibling directory does not permit creating textbooks, caches, or answers there. Scripts check actual paths after resolving `..` and symbolic links. Explicitly specified other input or output locations are handled under their respective authorization without broadening the scope for other files.
 
-A complete textbook covers the full teaching content of the authorized scope. A course-wide textbook must use the course directory explicitly selected by the user as its root. Reading a shared textbook elsewhere requires an explicitly specified location; assignment outputs still stay in the current task directory.
+References may be explicitly specified, inherited from clear course context, or inferred from the immediate course parent under the limits above. Read permission never permits writing to reference directories or automatically updating a textbook. A complete textbook still covers the full teaching content of the separately selected textbook generation scope. Creating or updating a course-wide textbook requires a separate request selecting that course directory; an assignment's reference scope does not change it.
 
 ## Installation
 
@@ -179,7 +254,7 @@ Open a new chat and use the existing names, `$learning-notes` and `$kill-your-qu
 The scripts require Python 3.10+ and use only the standard library. Reading PDFs, Office files, and media, and performing visual checks in a browser, depend on tools available in the environment. The builder preserves the existing offline search, collapsible table of contents, and formula and image rules.
 
 - [Building and source mapping](skills/learning-notes/references/textbook-handoff.md): pass `--scope-root` and `--catalog` when building to generate a lightweight index.
-- [On-demand lookup](skills/kill-your-quizs/references/textbook-reuse.md): find a topic by title or alias, read an individual knowledge block, and check the relevant page and source fingerprints.
+- [On-demand lookup](skills/kill-your-quizs/references/textbook-reuse.md): find a topic by title or alias, read an individual knowledge block, and check the relevant page and source fingerprints. For cross-directory reading, use `--work-root`, repeatable `--reference-root`, and `--index` for an external index; legacy `--scope-root` retains its strict single-directory behavior.
 - Legacy HTML without an index can still be consulted selectively, but the corresponding sources must be checked. Existing files are not automatically deleted or moved.
 - `coverage` records completion within the scope. File fingerprints indicate whether versions have changed; they do not establish that teaching conclusions are correct.
 - Build commands from before this update need `--scope-root`. The default output has changed from `<directory-name>-学习教材.html` in the scope root to `textbook/index.html`.

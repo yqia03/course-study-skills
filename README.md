@@ -116,7 +116,81 @@ lecture.pdf 已替换为老师更正后的版本。请核对受影响题目，�
     └── answer.md            # 本例的唯一提交文件
 ```
 
-阅读教材打开 `textbook/index.html`；提交作业只取题面要求的 `submit/` 文件。教材、索引、草稿和答案均留在 `lecture5/` 内，不会自动写入 `/courses/probability/`。若改为处理整门课程，需要明确指定课程目录作为新的范围。
+阅读教材打开 `textbook/index.html`；提交作业只取题面要求的 `submit/` 文件。教材、索引、草稿和答案均留在 `lecture5/` 内，不会自动写入 `/courses/probability/`。若改为制作整门课程的教材，需要明确指定课程目录作为新的教材生成范围。
+
+## 完整示例：教材与作业分属同一课程的兄弟目录
+
+课程资料与作业不必放在同一目录。以下仍是假设场景；先单独制作 Lecture8 的教材，再用它完成 problem_set_4。
+
+### 1. 在 Lecture8 内制作教材
+
+初始目录：
+
+```text
+/courses/CS6480/
+├── Lecture8/
+│   ├── lecture.pdf
+│   ├── transcript.txt
+│   └── demo.py
+└── problem_set_4/
+    └── homework.pdf
+```
+
+先发送独立的教材请求：
+
+```text
+使用 $learning-notes，以 /courses/CS6480/Lecture8 为教材生成范围，
+核验其中全部相关资料，生成能教懂初学者的完整 HTML 教材。
+教材与来源索引放在 Lecture8/textbook/，持久草稿放在 Lecture8/.study-work/。
+保留原始资料，本次不做 problem_set_4。
+```
+
+确认 `Lecture8/textbook/index.html` 与 `Lecture8/textbook/textbook-index.json` 已生成后，再开始作业。作业请求本身不会自动生成或更新 Lecture8 的教材。
+
+### 2. 明确分开工作目录与只读参考目录
+
+推荐明确指定两个目录，尤其适合新会话或课程上下文不完整时：
+
+```text
+使用 $kill-your-quizs，工作/输出目录为 /courses/CS6480/problem_set_4，
+完成其中的 homework.pdf。只读参考范围为 /courses/CS6480/Lecture8，
+优先查阅其中 textbook/ 的教材与索引，必要时核对原课件和课堂代码。
+本例题面允许 Markdown，答案写入工作目录下的 submit/answer.md；
+持久草稿、提取文本及运行产物只放在工作目录下的 .study-work/。
+保留课程原资料，不修改 Lecture8 或其中教材。
+```
+
+skill 先读题面和必要输入，再按题目检索 Lecture8 的相关教材块与来源。最终结构如下，作业阶段只在 `problem_set_4/` 写入文件：
+
+```text
+/courses/CS6480/
+├── Lecture8/                         # 作业阶段只读
+│   ├── lecture.pdf                   # 原资料保持不变
+│   ├── transcript.txt
+│   ├── demo.py
+│   ├── textbook/
+│   │   ├── index.html
+│   │   └── textbook-index.json
+│   └── .study-work/                  # 先前制作教材时留下的草稿
+└── problem_set_4/
+    ├── homework.pdf
+    ├── .study-work/                  # 本次作业的草稿与运行产物
+    └── submit/
+        └── answer.md                 # 本例的提交文件
+```
+
+### 3. 只给作业目录时的有限推断
+
+也可以简写为：
+
+```text
+使用 $kill-your-quizs，完成 /courses/CS6480/problem_set_4 中的 homework.pdf，
+按题面交付，全部输出留在 problem_set_4 内。
+```
+
+如果当前会话已经明确了本课程的参考范围，skill 可以沿用。否则，可以查看作业目录的直接父目录名称、目录结构与识别课程所需的最少内容；若 `CS6480/` 与 `Lecture8/` 等结构明确表明它们属于同一课程，可以将直接父目录 `/courses/CS6480` 推断为只读参考范围，并简短说明这一假设。读取仍按题目需要进行，不会提取整门课程的全部内容。
+
+这种推断不会继续向更高层目录扩展，不会搜索 Desktop、主目录、整个磁盘或其他课程。若父目录含义不明确，先留在作业目录内；只有确实缺少必要参考资料时才询问参考范围。明确要求“只在此目录读取”或给定更窄范围时，以该限制为准，不做父目录推断。
 
 ## 目录边界
 
@@ -133,9 +207,9 @@ lecture5/
 └── submit/                   # 必要答案与附件
 ```
 
-指定 `lecture5/` 就在其中工作，不能自动到父目录建立教材、缓存或答案目录。脚本检查解析 `..` 和符号链接后的实际路径。用户明确指定其他输入或输出位置时，按对应授权分别处理，不扩大其他文件的范围。
+作业的工作/输出根目录与课程参考搜索范围分别确定。指定 `lecture5/` 或 `problem_set_4/` 作为工作目录后，所有新生成文件和持久草稿默认只能留在该目录，答案用 `submit/`，草稿、提取文本和运行产物用 `.study-work/`。不能因为读取了父目录或兄弟目录，就在那些目录建立教材、缓存或答案。脚本检查解析 `..` 和符号链接后的实际路径；明确指定的其他输入或输出位置按对应授权分别处理，不扩大其他文件的范围。
 
-完整教材指本次授权范围的完整教学内容。全课程教材应以用户明确指定的课程目录为根；读取其他位置的共享教材需要明确指定其位置，作业输出仍留在当前任务目录。
+参考范围可由用户明确指定、沿用清晰的本课程上下文，或按上述规则有限推断直接课程父目录。只读授权绝不意味着可以写入参考目录或自动更新教材。完整教材仍指用户单独选定的教材生成范围的完整教学内容；制作或更新全课程教材需要另行明确选择课程目录，作业中的参考范围不会改变它。
 
 ## 安装
 
@@ -172,7 +246,7 @@ PY
 脚本需要 Python 3.10+，只使用标准库；读取 PDF、Office、媒体及浏览器视觉核验依赖所在环境已有工具。构建器保留原有的离线搜索、折叠目录、公式和图像规则。
 
 - [构建与来源映射](skills/learning-notes/references/textbook-handoff.md)：构建时传 `--scope-root` 与 `--catalog`，产生轻量索引。
-- [按需查阅](skills/kill-your-quizs/references/textbook-reuse.md)：按标题、别名查找并读取单个知识块，检查相关页面与来源指纹。
+- [按需查阅](skills/kill-your-quizs/references/textbook-reuse.md)：按标题、别名查找并读取单个知识块，检查相关页面与来源指纹。跨目录读取时使用 `--work-root`、可重复的 `--reference-root` 与指定外部索引的 `--index`；旧 `--scope-root` 仍保持严格的单目录行为。
 - 旧 HTML 无索引也能定向查阅，但需回查对应来源。旧文件不会被自动删除或移动。
 - `coverage` 记录范围完成情况；文件指纹只证明版本是否变化，不证明教学结论正确。
 - 更新前的构建命令需要补上 `--scope-root`；默认成品由根目录的 `<目录名>-学习教材.html` 改为 `textbook/index.html`。

@@ -23,19 +23,30 @@ class JsonArgumentParser(argparse.ArgumentParser):
         raise LookupError(message)
 
 
-def confined(base, value, scope, label):
+def relative_path(base, value, label):
     if not isinstance(value, str) or not value or Path(value).is_absolute():
         raise LookupError(f"{label} must be a nonempty relative path")
-    path = (base / value).resolve()
-    if not path.is_relative_to(scope):
-        raise LookupError(f"{label} escapes --scope-root: {value}")
+    return (base / value).resolve()
+
+
+def allowed(path, roots, label):
+    if not any(path.is_relative_to(root) for root in roots):
+        raise LookupError(f"{label} escapes allowed read roots")
     return path
 
 
-def load_index(scope, path):
-    path = path.resolve()
+def confined(base, value, scope, label):
+    path = relative_path(base, value, label)
     if not path.is_relative_to(scope):
-        raise LookupError("index escapes --scope-root")
+        raise LookupError(f"{label} escapes material scope (--scope-root in legacy mode): {value}")
+    return path
+
+
+def load_index(scope, path, read_roots=None):
+    legacy = read_roots is None
+    roots = [scope] if legacy else read_roots
+    path = path.resolve()
+    allowed(path, roots, "index")
     if not path.is_file():
         raise LookupError(
             f"No textbook index at {path}. Fall back to legacy HTML or raw "
@@ -51,9 +62,15 @@ def load_index(scope, path):
         raise LookupError("textbook index must be a JSON object")
     if data.get("schema_version") != 1 or data.get("generated_by") != "learning-notes":
         raise LookupError("Expected schema_version 1, generated_by 'learning-notes'")
-    declared_scope = confined(path.parent, data.get("scope_root"), scope, "scope_root")
-    if declared_scope != scope:
+    declared_scope = relative_path(path.parent, data.get("scope_root"), "scope_root")
+    allowed(declared_scope, roots, "declared scope_root")
+    if legacy and declared_scope != scope:
         raise LookupError("index scope_root does not equal explicit --scope-root")
+    scope = declared_scope
+    if not scope.is_dir():
+        raise LookupError("index scope_root must be an existing directory")
+    if not path.is_relative_to(scope):
+        raise LookupError("index escapes declared material scope")
     confined(path.parent, data.get("entry"), scope, "entry")
     if data.get("coverage") not in ("complete", "partial"):
         raise LookupError("coverage must be 'complete' or 'partial'")
@@ -98,7 +115,7 @@ def load_index(scope, path):
         ids = section.get("source_ids", [])
         if not isinstance(ids, list) or not all(type(i) is int and i >= 0 for i in ids):
             raise LookupError("section source_ids must be nonnegative integer IDs")
-    return data, path
+    return data, path, scope
 
 
 def section_metadata(section):
@@ -393,12 +410,27 @@ def read_section(page, anchor, limit):
 
 
 def lookup(args):
-    scope = Path(args.scope_root).resolve()
-    if not scope.is_dir():
-        raise LookupError("--scope-root must be an existing directory")
-    index = Path(args.index) if args.index else scope / "textbook" / "textbook-index.json"
-    data, index = load_index(scope, index)
+    if args.scope_root is not None:
+        if args.reference_root:
+            raise LookupError("--reference-root requires --work-root; it cannot be combined with --scope-root")
+        work = Path(args.scope_root).resolve()
+        if not work.is_dir():
+            raise LookupError("--scope-root must be an existing directory")
+        references = []
+        index = Path(args.index) if args.index else work / "textbook" / "textbook-index.json"
+        data, index, scope = load_index(work, index)
+    else:
+        work = Path(args.work_root).resolve()
+        if not work.is_dir():
+            raise LookupError("--work-root must be an existing directory")
+        references = [Path(root).resolve() for root in args.reference_root]
+        if not all(root.is_dir() for root in references):
+            raise LookupError("each --reference-root must be an existing directory")
+        index = Path(args.index) if args.index else work / "textbook" / "textbook-index.json"
+        data, index, scope = load_index(None, index, [work, *references])
     result = {"ok": True, "trust": "untrusted_data", "index": str(index),
+              "work_root": str(work), "reference_roots": [str(root) for root in references],
+              "material_root": str(scope),
               "entry": data["entry"], "coverage": data["coverage"],
               "limitations": data["limitations"]}
     if args.section is None:
@@ -446,8 +478,13 @@ def lookup(args):
 
 def main(argv=None):
     parser = JsonArgumentParser(description=__doc__)
-    parser.add_argument("--scope-root", required=True)
-    parser.add_argument("--index", help="Index path; default: SCOPE/textbook/textbook-index.json")
+    roots = parser.add_mutually_exclusive_group(required=True)
+    roots.add_argument("--scope-root", help="Legacy mode: index material scope must equal this directory")
+    roots.add_argument("--work-root", help="Assignment work/output directory; also an allowed read root")
+    parser.add_argument("--reference-root", action="append", default=[],
+                        help="Additional read-only course directory (repeatable; requires --work-root)")
+    parser.add_argument("--index", help="Existing index path; relative paths use the current working directory. "
+                        "Default: WORK/textbook/textbook-index.json (SCOPE in legacy mode); no parent search")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--query", help="Case-insensitive substring in section titles/aliases only")
     mode.add_argument("--section", help="Exact indexed page.html#anchor")

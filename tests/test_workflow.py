@@ -18,7 +18,7 @@ class WorkflowTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.scope = Path(temporary.name) / "lecture5"
+        self.scope = Path(temporary.name) / "course" / "Lecture8"
         work = self.scope / ".study-work"
         work.mkdir(parents=True)
         (self.scope / "lecture.txt").write_text("P(A|B) = P(A and B)/P(B), P(B)>0.\n")
@@ -67,6 +67,28 @@ class WorkflowTests(unittest.TestCase):
         self.scope = moved
         result = self.read("--section", "index.html#conditional")
         self.assertEqual(result["freshness"]["state"], "current")
+
+    def test_lecture_book_is_read_from_separate_assignment_work_root(self):
+        work = self.scope.parent / "problem_set_4"
+        work.mkdir()
+        (work / "lecture.txt").write_text("Unrelated assignment source.\n")
+        before = {str(path): path.read_bytes() for path in self.scope.parent.rglob("*")
+                  if path.is_file()}
+        result = subprocess.run([
+            sys.executable, str(READER), "--work-root", str(work),
+            "--reference-root", str(self.scope.parent),
+            "--index", str(self.scope / "textbook" / "textbook-index.json"),
+            "--section", "index.html#conditional",
+        ], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["freshness"]["state"], "current")
+        self.assertEqual(data["source_locations"]["materials"], ["lecture.txt"])
+        self.assertEqual(data["material_root"], str(self.scope.resolve()))
+        self.assertEqual(data["work_root"], str(work.resolve()))
+        self.assertFalse((work / "textbook").exists())
+        self.assertEqual(before, {str(path): path.read_bytes()
+                                  for path in self.scope.parent.rglob("*") if path.is_file()})
 
     def test_unmapped_section_does_not_claim_verified_sources(self):
         result = self.read("--section", "index.html#other")

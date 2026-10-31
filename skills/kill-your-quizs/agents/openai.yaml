@@ -1,4 +1,4 @@
 interface:
   display_name: "Kill your QUIZS"
-  short_description: "按课堂方法完成作业，优先查阅已有教材，只交必要答案与文件"
-  default_prompt: "使用 $kill-your-quizs，在我指定的目录内完成作业：先查已有教材，必要时回查原资料，按课堂方法写最小完整答案并放入该目录的 submit/。"
+  short_description: "分开作业输出与课程资料范围，复用相关教材，按课堂方法交付最小完整答案"
+  default_prompt: "使用 $kill-your-quizs 完成指定目录的作业，单独确定课程资料的只读搜索范围，优先复用相关教材，必要时回查原资料；答案放在作业目录的 submit/，草稿和运行产物也留在作业目录内。"

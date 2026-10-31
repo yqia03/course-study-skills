@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -72,6 +73,122 @@ class ReadTextbookTests(unittest.TestCase):
         status, result = self.call("--section", "page.html#" + name, *args)
         self.assertEqual(status, 0, result)
         return result
+
+    def split_layout(self):
+        lecture = self.scope / "Lecture8"
+        lecture.mkdir()
+        self.book.rename(lecture / "textbook")
+        self.source.rename(lecture / "lecture.txt")
+        self.book = lecture / "textbook"
+        self.page = self.book / "page.html"
+        self.index = self.book / "textbook-index.json"
+        self.source = lecture / "lecture.txt"
+        work = self.scope / "problem_set_4"
+        work.mkdir()
+        return work, lecture
+
+    def call_work(self, work, *args):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = reader.main(["--work-root", str(work), *args])
+        return status, json.loads(output.getvalue())
+
+    def test_separate_work_and_course_reference_roots_read_without_writes(self):
+        work, lecture = self.split_layout()
+        # A same-named assignment file must not become the lecture source.
+        (work / "lecture.txt").write_text("Assignment local file", encoding="utf-8")
+        before = {str(p.relative_to(self.scope)): p.read_bytes()
+                  for p in self.scope.rglob("*") if p.is_file()}
+        status, result = self.call_work(
+            work, "--reference-root", str(self.scope), "--index", str(self.index),
+            "--section", "page.html#child")
+        self.assertEqual(status, 0, result)
+        self.assertEqual(result["freshness"]["state"], "current")
+        self.assertEqual(result["work_root"], str(work.resolve()))
+        self.assertEqual(result["reference_roots"], [str(self.scope.resolve())])
+        self.assertEqual(result["material_root"], str(lecture.resolve()))
+        self.assertEqual(result["source_locations"]["materials"], ["lecture.txt"])
+        self.assertEqual(before, {str(p.relative_to(self.scope)): p.read_bytes()
+                                  for p in self.scope.rglob("*") if p.is_file()})
+        self.assertFalse((work / "textbook").exists())
+
+    def test_reference_access_requires_explicit_root_and_does_not_search_parents(self):
+        work, lecture = self.split_layout()
+        self.assertIn("allowed read roots", self.call_work(
+            work, "--index", str(self.index))[1]["error"])
+        self.assertIn(str(work / "textbook" / "textbook-index.json"), self.call_work(
+            work, "--reference-root", str(self.scope))[1]["error"])
+        sibling = self.scope / "Lecture9"
+        sibling.mkdir()
+        self.assertEqual(self.call_work(
+            work, "--reference-root", str(sibling), "--index", str(self.index))[0], 1)
+        self.assertEqual(self.call_work(
+            work, "--reference-root", str(sibling), "--reference-root", str(lecture),
+            "--index", str(self.index))[0], 0)
+
+    def test_index_metadata_cannot_expand_reference_access(self):
+        work, lecture = self.split_layout()
+        self.data["scope_root"] = "../.."
+        self.save()
+        status, result = self.call_work(work, "--reference-root", str(lecture),
+                                        "--index", str(self.index))
+        self.assertEqual(status, 1)
+        self.assertIn("declared scope_root escapes allowed read roots", result["error"])
+
+    def test_narrow_material_scope_confines_all_index_paths(self):
+        work, lecture = self.split_layout()
+        # The outer course is authorized, but a lecture index cannot reach siblings.
+        for container, key in ((self.data, "entry"), (self.data["sections"][0], "path"),
+                               (self.data["sources"][0], "path"),
+                               (self.data["pages"][0], "path")):
+            old = container[key]
+            container[key] = "../../problem_set_4/outside.html"
+            self.save()
+            self.assertEqual(self.call_work(work, "--reference-root", str(self.scope),
+                                            "--index", str(self.index))[0], 1)
+            container[key] = old
+        self.save()
+        self.assertEqual(self.call_work(
+            work, "--reference-root", str(self.scope), "--index", str(self.index),
+            "--section", "../../problem_set_4/outside.html#x")[0], 1)
+
+    def test_reference_index_page_and_source_symlink_escapes_rejected(self):
+        work, lecture = self.split_layout()
+        outside = self.scope / "outside.txt"
+        outside.write_text("outside", encoding="utf-8")
+        for target in (self.index, self.page, self.source):
+            previous = target.read_bytes()
+            target.unlink()
+            target.symlink_to(outside)
+            status, result = self.call_work(work, "--reference-root", str(lecture),
+                                            "--index", str(self.index))
+            self.assertEqual(status, 1, result)
+            target.unlink()
+            target.write_bytes(previous)
+
+    def test_invalid_roots_and_mixed_root_modes_are_rejected(self):
+        work, lecture = self.split_layout()
+        for invalid in (self.scope / "missing", self.source):
+            self.assertEqual(self.call_work(invalid)[0], 1)
+            self.assertEqual(self.call_work(work, "--reference-root", str(invalid))[0], 1)
+        self.assertEqual(self.call_work(work, "--scope-root", str(lecture))[0], 1)
+        self.assertIn("cannot be combined", self.call(
+            "--reference-root", str(lecture))[1]["error"])
+
+    def test_default_index_inside_work_and_relative_explicit_index(self):
+        status, result = self.call_work(self.scope, "--section", "page.html#child")
+        self.assertEqual(status, 0, result)
+        self.assertEqual(result["freshness"]["state"], "current")
+        # Relative explicit indexes retain cwd semantics, even with another work root.
+        work, lecture = self.split_layout()
+        previous_cwd = Path.cwd()
+        try:
+            os.chdir(self.scope)
+            status, result = self.call_work(work, "--reference-root", str(lecture),
+                                            "--index", "Lecture8/textbook/textbook-index.json")
+        finally:
+            os.chdir(previous_cwd)
+        self.assertEqual(status, 0, result)
 
     def test_read_chinese_english_math_and_h2_children(self):
         result = self.section()
